@@ -27,6 +27,7 @@ import configparser
 
 # Script level imports
 sys.path.append(os.path.abspath(sys.path[0] + '/..'))
+# pip install --process-dependency-links https://github.com/IGITUGraz/live-plotter/archive/master.zip
 import live_plotter as lv   # Custom live plotting library
 from carla            import sensor
 from carla.client     import make_carla_client, VehicleControl
