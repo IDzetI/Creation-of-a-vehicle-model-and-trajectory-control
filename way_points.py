@@ -25,10 +25,6 @@ import matplotlib.pyplot as plt
 import controller2d
 import configparser
 
-# Script level imports
-sys.path.append(os.path.abspath(sys.path[0] + '/..'))
-# pip install --process-dependency-links https://github.com/IGITUGraz/live-plotter/archive/master.zip
-import live_plotter as lv   # Custom live plotting library
 from carla            import sensor
 from carla.client     import make_carla_client, VehicleControl
 from carla.settings   import CarlaSettings
@@ -405,94 +401,7 @@ def exec_waypoint_nav_demo(args):
         #############################################
         # Vehicle Trajectory Live Plotting Setup
         #############################################
-        # Uses the live plotter to generate live feedback during the simulation
-        # The two feedback includes the trajectory feedback and
-        # the controller feedback (which includes the speed tracking).
-        lp_traj = lv.LivePlotter(tk_title="Trajectory Trace")
-        lp_1d = lv.LivePlotter(tk_title="Controls Feedback")
 
-        ###
-        # Add 2D position / trajectory plot
-        ###
-        trajectory_fig = lp_traj.plot_new_dynamic_2d_figure(
-                title='Vehicle Trajectory',
-                figsize=(FIGSIZE_X_INCHES, FIGSIZE_Y_INCHES),
-                edgecolor="black",
-                rect=[PLOT_LEFT, PLOT_BOT, PLOT_WIDTH, PLOT_HEIGHT])
-
-        trajectory_fig.set_invert_x_axis() # Because UE4 uses left-handed
-                                           # coordinate system the X
-                                           # axis in the graph is flipped
-        trajectory_fig.set_axis_equal()    # X-Y spacing should be equal in size
-
-        # Add waypoint markers
-        trajectory_fig.add_graph("waypoints", window_size=waypoints_np.shape[0],
-                                 x0=waypoints_np[:,0], y0=waypoints_np[:,1],
-                                 linestyle="-", marker="", color='g')
-        # Add trajectory markers
-        trajectory_fig.add_graph("trajectory", window_size=TOTAL_EPISODE_FRAMES,
-                                 x0=[start_x]*TOTAL_EPISODE_FRAMES,
-                                 y0=[start_y]*TOTAL_EPISODE_FRAMES,
-                                 color=[1, 0.5, 0])
-        """
-        # Add lookahead path
-        trajectory_fig.add_graph("lookahead_path",
-                                 window_size=INTERP_MAX_POINTS_PLOT,
-                                 x0=[start_x]*INTERP_MAX_POINTS_PLOT,
-                                 y0=[start_y]*INTERP_MAX_POINTS_PLOT,
-                                 color=[0, 0.7, 0.7],
-                                 linewidth=4)
-        """
-        # Add starting position marker
-        trajectory_fig.add_graph("start_pos", window_size=1,
-                                 x0=[start_x], y0=[start_y],
-                                 marker=11, color=[1, 0.5, 0],
-                                 markertext="Start", marker_text_offset=1)
-        # Add end position marker
-        trajectory_fig.add_graph("end_pos", window_size=1,
-                                 x0=[waypoints_np[-1, 0]],
-                                 y0=[waypoints_np[-1, 1]],
-                                 marker="D", color='r',
-                                 markertext="End", marker_text_offset=1)
-        # Add car marker
-        trajectory_fig.add_graph("car", window_size=1,
-                                 marker="s", color='b', markertext="Car",
-                                 marker_text_offset=1)
-
-        ###
-        # Add 1D speed profile updater
-        ###
-        forward_speed_fig =\
-                lp_1d.plot_new_dynamic_figure(title="Forward Speed (km/h)")
-        forward_speed_fig.add_graph("forward_speed",
-                                    label="forward_speed",
-                                    window_size=TOTAL_EPISODE_FRAMES)
-        forward_speed_fig.add_graph("reference_signal",
-                                    label="reference_Signal",
-                                    window_size=TOTAL_EPISODE_FRAMES)
-
-        # Add throttle signals graph
-        throttle_fig = lp_1d.plot_new_dynamic_figure(title="Throttle (%)")
-        throttle_fig.add_graph("throttle",
-                              label="throttle",
-                              window_size=TOTAL_EPISODE_FRAMES)
-        """
-        # Add brake signals graph
-        brake_fig = lp_1d.plot_new_dynamic_figure(title="Brake")
-        brake_fig.add_graph("brake",
-                              label="brake",
-                              window_size=TOTAL_EPISODE_FRAMES)
-        """
-        # Add steering signals graph
-        steer_fig = lp_1d.plot_new_dynamic_figure(title="Steer (Degree)")
-        steer_fig.add_graph("steer",
-                              label="steer",
-                              window_size=TOTAL_EPISODE_FRAMES)
-
-        # live plotter is disabled, hide windows
-        if not enable_live_plot:
-            lp_traj._root.withdraw()
-            lp_1d._root.withdraw()
 
         # Iterate the frames until the end of the waypoints is reached or
         # the TOTAL_EPISODE_FRAMES is reached. The controller simulation then
@@ -624,44 +533,6 @@ def exec_waypoint_nav_demo(args):
             controller.update_controls()
             cmd_throttle, cmd_steer, cmd_brake = controller.get_commands()
 
-            # Skip the first frame (so the controller has proper outputs)
-            if skip_first_frame and frame == 0:
-                pass
-            else:
-                # Update live plotter with new feedback
-                trajectory_fig.roll("trajectory", current_x, current_y)
-                trajectory_fig.roll("car", current_x, current_y)
-                # When plotting lookahead path, only plot a number of points
-                # (INTERP_MAX_POINTS_PLOT amount of points). This is meant
-                # to decrease load when live plotting
-                new_waypoints_np = np.array(new_waypoints)
-                path_indices = np.floor(np.linspace(0,
-                                                    new_waypoints_np.shape[0]-1,
-                                                    INTERP_MAX_POINTS_PLOT))
-                """
-                trajectory_fig.update("lookahead_path",
-                        new_waypoints_np[path_indices.astype(int), 0],
-                        new_waypoints_np[path_indices.astype(int), 1],
-                        new_colour=[0, 0.7, 0.7])
-                """
-                forward_speed_fig.roll("forward_speed",
-                                       current_timestamp,
-                                       current_speed*3.6) # m/s to km/h
-                forward_speed_fig.roll("reference_signal",
-                                       current_timestamp,
-                                       controller._desired_speed*3.6) # m/s to km/h
-
-                throttle_fig.roll("throttle", current_timestamp, cmd_throttle*100)
-                #brake_fig.roll("brake", current_timestamp, cmd_brake)
-                steer_fig.roll("steer", current_timestamp, cmd_steer*180/np.pi)
-
-                # Refresh the live plot based on the refresh rate
-                # set by the options
-                if enable_live_plot and \
-                   live_plot_timer.has_exceeded_lap_period():
-                    lp_traj.refresh()
-                    lp_1d.refresh()
-                    live_plot_timer.lap()
 
             # Output controller command to CARLA server
             send_control_command(client,
@@ -689,11 +560,6 @@ def exec_waypoint_nav_demo(args):
         # Stop the car
         send_control_command(client, throttle=0.0, steer=0.0, brake=1.0)
         # Store the various outputs
-        store_trajectory_plot(trajectory_fig.fig, 'trajectory.png')
-        store_trajectory_plot(forward_speed_fig.fig, 'forward_speed.png')
-        store_trajectory_plot(throttle_fig.fig, 'throttle_output.png')
-        #store_trajectory_plot(brake_fig.fig, 'brake_output.png')
-        store_trajectory_plot(steer_fig.fig, 'steer_output.png')
         write_trajectory_file(x_history, y_history, speed_history, time_history)
 
 def main():
